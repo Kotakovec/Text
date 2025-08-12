@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nekonečný Word konzolově</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    font-family: monospace, Consolas, "Courier New", monospace;
+    color: #00FF00;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #terminal-header {
+    background: #000;
+    color: #33FF33;
+    font-weight: bold;
+    padding: 10px 20px;
+    font-family: monospace, Consolas, "Courier New", monospace;
+    border-bottom: 1px solid #004400;
+    user-select: none;
+    box-shadow: 0 0 10px #008800;
+  }
+  #editor {
+    flex: 1;
+    margin: 0 40px 30px 40px;
+    outline: none;
+    font-size: 18px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    user-select: none;
+    text-align: left;
+    border: 1px solid transparent;
+    padding: 10px;
+    background: #000;
+    color: #00FF00;
+    overflow-y: auto;
+  }
+  #editor.editable {
+    user-select: text;
+    border-color: #008000;
+    box-shadow: 0 0 10px #004400;
+  }
+  #editor > div {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div id="terminal-header">frcontrol@linux:~$</div>
+
+<div id="editor" contenteditable="false"></div>
+
+<script>
+  const STORAGE_KEY = 'frcontrol_content';
+  const editor = document.getElementById('editor');
+
+  let bulletMode = false;
+
+  function loadContent() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      editor.innerHTML = saved;
+    } else {
+      editor.innerHTML = '<div><br></div>';
+    }
+  }
+
+  function saveContent() {
+    localStorage.setItem(STORAGE_KEY, editor.innerHTML);
+  }
+
+  loadContent();
+
+  window.controlEnabled = false;
+
+  function enableEditing() {
+    editor.contentEditable = "true";
+    editor.classList.add('editable');
+    editor.focus();
+    placeCaretAtEnd(getLastOrFirstLine());
+    window.controlEnabled = true;
+
+    // Nezapisujeme do terminálu, ale vypíšeme do konzole
+    console.clear();
+    console.log("Editor odemčen. Můžeš psát!");
+    console.log(`
+Příkazy dostupné v konzoli:
+
+control - odemčení editoru
+save - uložit obsah a zamknout editor
+exit - zamknout editor bez uložení
+leva - zarovnat řádek vlevo
+stred - zarovnat řádek na střed
+prava - zarovnat řádek vpravo
+tucny - přepnout tučný styl vybraného textu
+podtrzeny - přepnout podtržení vybraného textu
+odrazka - zapnout/vypnout režim odrážek
+size(X) - nastavit velikost vybraného textu na X px, např. size(20)
+    `);
+  }
+
+  function disableEditing() {
+    editor.contentEditable = "false";
+    editor.classList.remove('editable');
+    window.controlEnabled = false;
+    console.log("Editor uzamčen.");
+  }
+
+  function getLastOrFirstLine() {
+    if (editor.childNodes.length === 0) {
+      const div = document.createElement('div');
+      div.innerHTML = '<br>';
+      editor.appendChild(div);
+      return div;
+    }
+    for (let i = editor.childNodes.length - 1; i >= 0; i--) {
+      const node = editor.childNodes[i];
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'DIV') {
+        const text = node.textContent.trim();
+        if (text.length > 0) return node;
+      }
+    }
+    for (let i = 0; i < editor.childNodes.length; i++) {
+      const node = editor.childNodes[i];
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'DIV') {
+        return node;
+      }
+    }
+    const div = document.createElement('div');
+    div.innerHTML = '<br>';
+    editor.appendChild(div);
+    return div;
+  }
+
+  function placeCaretAtEnd(el) {
+    if (!el) return;
+    editor.focus();
+    const range = document.createRange();
+    const sel = window.getSelection();
+
+    if (el.lastChild && el.lastChild.nodeType === Node.TEXT_NODE) {
+      range.setStart(el.lastChild, el.lastChild.length);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function applyAlign(align) {
+    const line = getLastOrFirstLine();
+    if (!line || !line.style) return;
+    line.style.textAlign = align;
+    placeCaretAtEnd(line);
+    console.log(`Řádek zarovnán na ${align}`);
+  }
+
+  function toggleBoldOnSelection() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro tučný styl.");
+      return;
+    }
+    document.execCommand('bold');
+    sel.removeAllRanges();
+    sel.addRange(range);
+    console.log("Tučný styl přepnut na vybraný text.");
+  }
+
+  function toggleUnderlineOnSelection() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro podtržení.");
+      return;
+    }
+    document.execCommand('underline');
+    sel.removeAllRanges();
+    sel.addRange(range);
+    console.log("Podtržení přepnuto na vybraný text.");
+  }
+
+  function setSizeOnSelection(px) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro nastavení velikosti.");
+      return;
+    }
+
+    const span = document.createElement('span');
+    span.style.fontSize = px + 'px';
+
+    const contents = range.extractContents();
+    span.appendChild(contents);
+    range.insertNode(span);
+
+    range.setStartAfter(span);
+    range.collapse(true);
+
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    console.log(`Velikost vybraného textu nastavena na ${px}px.`);
+  }
+
+  editor.addEventListener('keydown', (e) => {
+    if (!window.controlEnabled) {
+      e.preventDefault();
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+
+      const newDiv = document.createElement('div');
+      if (bulletMode) {
+        newDiv.textContent = '• ';
+      } else {
+        newDiv.innerHTML = '<br>';
+      }
+
+      const currentLine = getLastOrFirstLine();
+      if (currentLine && currentLine.nextSibling) {
+        editor.insertBefore(newDiv, currentLine.nextSibling);
+      } else {
+        editor.appendChild(newDiv);
+      }
+
+      placeCaretAtEnd(newDiv);
+      return;
+    }
+  });
+
+  editor.addEventListener('beforeinput', (e) => {
+    if (!window.controlEnabled) {
+      e.preventDefault();
+    }
+  });
+
+  Object.defineProperties(window, {
+    control: {
+      get() {
+        if (!window.controlEnabled) {
+          enableEditing();
+        } else {
+          console.log("Editor je už odemčený.");
+        }
+      }
+    },
+    save: {
+      get() {
+        if (window.controlEnabled) {
+          saveContent();
+          disableEditing();
+          console.log("Obsah uložen do localStorage a editor uzamčen.");
+        } else {
+          console.log("Editor není aktivní, není co ukládat.");
+        }
+      }
+    },
+    exit: {
+      get() {
+        if (window.controlEnabled) {
+          disableEditing();
+          console.log("Editor uzamčen bez uložení.");
+        } else {
+          console.log("Editor není aktivní.");
+        }
+      }
+    },
+    leva: {
+      get() {
+        applyAlign('left');
+      }
+    },
+    stred: {
+      get() {
+        applyAlign('center');
+      }
+    },
+    prava: {
+      get() {
+        applyAlign('right');
+      }
+    },
+    tucny: {
+      get() {
+        toggleBoldOnSelection();
+      }
+    },
+    podtrzeny: {
+      get() {
+        toggleUnderlineOnSelection();
+      }
+    },
+    odrazka: {
+      get() {
+        bulletMode = !bulletMode;
+        console.log('Režim odrážek ' + (bulletMode ? 'zapnut' : 'vypnut'));
+        if (bulletMode) {
+          const lastLine = getLastOrFirstLine();
+          if (lastLine && !lastLine.textContent.startsWith('• ')) {
+            lastLine.textContent = '• ' + lastLine.textContent;
+            placeCaretAtEnd(lastLine);
+          }
+        }
+      }
+    }
+  });
+
+  window.size = function(px) {
+    if (!window.controlEnabled) {
+      console.log("Nejprve spusť 'control' pro odemčení editoru.");
+      return;
+    }
+    const num = Number(px);
+    if (isNaN(num) || num <= 0 || num > 100) {
+      console.log("Neplatná velikost. Zadej číslo v rozsahu 1-100.");
+      return;
+    }
+    setSizeOnSelection(num);
+  };
+
+  // Klávesová zkratka pro odemčení editoru: Ctrl+Shift+C
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+      if (!window.controlEnabled) enableEditing();
+      else console.log("Editor je už odemčený.");
+    }
+  });
+
+  // Inicialní zpráva
+  
+</script>
+
+</body>
+</html>
