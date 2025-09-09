@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Word s Popup Editorem</title>
+<title>Jednoduchý Word s Popup Editorem</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -16,7 +16,7 @@
   .toolbar {
     background: #f0f0f0;
     padding: 10px;
-    display: none; /* skrytý dokud není editmode */
+    display: none; /* schovaný dokud není editmode */
     gap: 5px;
     flex-wrap: wrap;
   }
@@ -85,13 +85,13 @@
   <button onclick="openPopupEditor()">Otevřít nové okno</button>
 </div>
 
-<div id="editor"></div>
+<div id="editor" contenteditable="false"></div>
 
 <script>
 const editor = document.getElementById('editor');
 const toolbar = document.getElementById('toolbar');
 
-// Načtení textu z localStorage
+// Načtení textu
 window.onload = () => {
   const saved = localStorage.getItem('myWordContent');
   if(saved) editor.innerHTML = saved;
@@ -104,27 +104,14 @@ function format(command, value = null) {
   saveText();
 }
 
-// Uložení
-function saveText() {
-  localStorage.setItem('myWordContent', editor.innerHTML);
-}
-
-// Tajný editmode
-window.editmode = () => {
-  editor.setAttribute('contenteditable', 'true');
-  toolbar.style.display = 'flex';
-};
-
-// Ctrl+E zapne editmode
-document.addEventListener('keydown', (e) => {
-  if(e.ctrlKey && e.key.toLowerCase() === 'e') {
-    e.preventDefault();
-    editmode();
-  }
+// Automatické ukládání
+editor.addEventListener('input', () => {
+  if(editor.isContentEditable) saveText();
 });
+editor.addEventListener('keydown', handleKeys);
 
 // Enter a Tab
-editor.addEventListener('keydown', (e) => {
+function handleKeys(e) {
   if(!editor.isContentEditable) return;
   if(e.key === 'Enter') {
     e.preventDefault();
@@ -136,14 +123,28 @@ editor.addEventListener('keydown', (e) => {
     document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
     saveText();
   }
+}
+
+// Uložení
+function saveText() {
+  localStorage.setItem('myWordContent', editor.innerHTML);
+}
+
+// Tajný edit mode
+window.editmode = () => {
+  editor.setAttribute('contenteditable', 'true');
+  toolbar.style.display = 'flex';
+};
+
+// Ctrl+E na zapnutí editmode
+document.addEventListener('keydown', (e) => {
+  if(e.ctrlKey && e.key.toLowerCase() === 'e') {
+    e.preventDefault();
+    editmode();
+  }
 });
 
-// Input ukládá
-editor.addEventListener('input', () => {
-  if(editor.isContentEditable) saveText();
-});
-
-// Vložit kód
+// Vložení kódu
 function insertCode() {
   if(!editor.isContentEditable) return;
   const code = prompt("Vlož sem svůj kód:");
@@ -160,7 +161,7 @@ function insertCode() {
   saveText();
 }
 
-// Otevření nového popup editoru
+// Otevření nového okna s editorem
 function openPopupEditor() {
   const popup = window.open("", "_blank", "width=800,height=600");
   popup.document.write(`
