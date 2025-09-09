@@ -1,307 +1,238 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Editor (Ctrl+E = editmode)</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jednoduchý Word s Kódem a Modálním Editorem</title>
 <style>
-  :root { --toolbar-bg:#f0f0f0; --code-bg:#1e1e1e; --code-color:#d4d4d4; }
-  body{font-family:Arial, sans-serif;margin:0;height:100vh;display:flex;flex-direction:column;}
-  .toolbar{
-    background:var(--toolbar-bg);
-    padding:10px;
-    display:none; /* hidden until editmode */
-    gap:6px; flex-wrap:wrap;
-    align-items:center;
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
   }
-  .toolbar button, .toolbar select{padding:6px;}
-  #editor{
-    flex:1;padding:18px;outline:none;border:none;overflow:auto;white-space:pre-wrap;background:#fff;
-    min-height:120px;
+  .toolbar {
+    background: #f0f0f0;
+    padding: 10px;
+    display: none; /* skrytý toolbar dokud není editmode */
+    gap: 5px;
+    flex-wrap: wrap;
   }
-  /* code block style */
-  .code-block{
-    background:var(--code-bg);
-    color:var(--code-color);
-    font-family:'Courier New',monospace;
-    padding:10px;
-    display:flex;
-    gap:12px;
-    border-radius:4px;
+  .toolbar button, .toolbar select {
+    padding: 5px;
   }
-  .line-numbers{
-    text-align:right;
-    user-select:none;
-    color:#888;
-    padding-right:8px;
-    min-width:34px;
+  #editor {
+    flex: 1;
+    padding: 20px;
+    border: none;
+    outline: none;
+    overflow-y: auto;
+    background: #fff;
+    font-family: Arial, sans-serif;
+    white-space: pre-wrap;
   }
-  .code-content{white-space:pre;overflow:auto;}
-  /* small indicator top-right when editing */
-  #edit-indicator{
-    position:fixed; right:10px; top:10px;
-    background:#2ecc71;color:#fff;padding:6px 8px;border-radius:4px;font-size:12px;display:none;
-    box-shadow:0 2px 6px rgba(0,0,0,0.15);
+  /* Styl pro code block */
+  .code-block {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: 'Courier New', monospace;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+  }
+  .line-numbers {
+    text-align: right;
+    user-select: none;
+    color: #888;
+  }
+  .code-content {
+    white-space: pre;
+  }
+
+  /* Modální okno */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 10%;
+    left: 10%;
+    width: 80%;
+    height: 80%;
+    background: #fff;
+    border: 2px solid #000;
+    z-index: 1000;
+    flex-direction: column;
+  }
+  .modal-header {
+    background: #f0f0f0;
+    padding: 5px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .modal-body {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+    border-top: 1px solid #ccc;
+  }
+  .close-btn {
+    cursor: pointer;
+    font-weight: bold;
   }
 </style>
 </head>
 <body>
 
 <div class="toolbar" id="toolbar">
-  <button type="button" onclick="format('bold')"><b>B</b></button>
-  <button type="button" onclick="format('underline')"><u>U</u></button>
-
-  <label style="display:flex;align-items:center;gap:6px;">
-    <span style="font-size:13px">Font</span>
-    <select onchange="format('fontName', this.value)">
-      <option value="">(výchozí)</option>
-      <option value="Arial">Klasický (Arial)</option>
-      <option value="Courier New">Linux Terminal (Courier New)</option>
-      <option value="monospace">Monospace</option>
-    </select>
-  </label>
-
-  <label style="display:flex;align-items:center;gap:6px;">
-    <span style="font-size:13px">Velikost</span>
-    <select onchange="format('fontSize', this.value)">
-      <option value="">(výchozí)</option>
-      <option value="1">10px</option>
-      <option value="2">13px</option>
-      <option value="3">16px</option>
-      <option value="4">18px</option>
-      <option value="5">24px</option>
-      <option value="6">32px</option>
-      <option value="7">48px</option>
-    </select>
-  </label>
-
-  <label style="display:flex;align-items:center;gap:6px;">
-    <span style="font-size:13px">Barva</span>
-    <select onchange="format('foreColor', this.value)">
-      <option value="">(barva)</option>
-      <option value="black">Černá</option>
-      <option value="red">Červená</option>
-      <option value="blue">Modrá</option>
-      <option value="green">Zelená</option>
-    </select>
-  </label>
-
-  <button type="button" onclick="format('insertUnorderedList')">• List</button>
-  <button type="button" onclick="format('insertOrderedList')">1. List</button>
-
-  <button type="button" onclick="insertCode()">Vložit kód</button>
-  <button type="button" onclick="openPopupEditor()">Otevřít nové okno</button>
+  <button onclick="format('bold')"><b>B</b></button>
+  <button onclick="format('underline')"><u>U</u></button>
+  <select onchange="format('fontName', this.value)">
+    <option value="">Font</option>
+    <option value="Arial">Klasický</option>
+    <option value="Courier New">Linux Terminal</option>
+    <option value="monospace">Monospace</option>
+  </select>
+  <select onchange="format('fontSize', this.value)">
+    <option value="">Velikost textu</option>
+    <option value="1">10px</option>
+    <option value="2">13px</option>
+    <option value="3">16px</option>
+    <option value="4">18px</option>
+    <option value="5">24px</option>
+    <option value="6">32px</option>
+    <option value="7">48px</option>
+  </select>
+  <select onchange="format('foreColor', this.value)">
+    <option value="">Barva textu</option>
+    <option value="red">Červená</option>
+    <option value="blue">Modrá</option>
+    <option value="green">Zelená</option>
+    <option value="black">Černá</option>
+  </select>
+  <button onclick="format('insertUnorderedList')">• List</button>
+  <button onclick="format('insertOrderedList')">1. List</button>
+  <button onclick="insertCode()">Vložit kód</button>
+  <button onclick="openModalEditor()">Otevřít okno editoru</button>
 </div>
 
-<div id="editor" aria-label="Hlavní editor"></div>
+<div id="editor" contenteditable="false"></div>
 
-<div id="edit-indicator">EDIT MODE ON</div>
+<!-- Modální okno -->
+<div class="modal" id="modal">
+  <div class="modal-header">
+    <span class="close-btn" onclick="closeModal()">X</span>
+  </div>
+  <div class="modal-body" id="modal-editor" contenteditable="false" style="font-family: Arial, sans-serif; white-space: pre-wrap;"></div>
+</div>
 
 <script>
-/* ---------- helper & state ---------- */
 const editor = document.getElementById('editor');
 const toolbar = document.getElementById('toolbar');
-const indicator = document.getElementById('edit-indicator');
-let isEditing = false;
-const STORAGE_KEY = 'myWordContent_v1';
+const modal = document.getElementById('modal');
+const modalEditor = document.getElementById('modal-editor');
 
-/* safe HTML escape for code blocks */
-function escapeHtml(s){
-  return s.replaceAll('&','&amp;')
-          .replaceAll('<','&lt;')
-          .replaceAll('>','&gt;')
-          .replaceAll('"','&quot;')
-          .replaceAll("'",'&#39;');
-}
-
-/* ---------- load saved ---------- */
-window.addEventListener('load', () => {
-  const saved = localStorage.getItem(STORAGE_KEY);
+// Načtení uloženého textu při načtení stránky
+window.onload = () => {
+  const saved = localStorage.getItem('myWordContent');
   if(saved) editor.innerHTML = saved;
-});
-
-/* ---------- editmode toggle (callable) ---------- */
-window.editmode = function(turnOn = true){
-  // if boolean passed, set to that; if omitted, toggle
-  if(typeof turnOn !== 'boolean') turnOn = !isEditing;
-  isEditing = turnOn;
-  if(isEditing){
-    editor.setAttribute('contenteditable', 'true');
-    toolbar.style.display = 'flex';
-    indicator.style.display = 'block';
-    editor.focus();
-  } else {
-    editor.removeAttribute('contenteditable');
-    toolbar.style.display = 'none';
-    indicator.style.display = 'none';
-  }
 };
 
-/* also Ctrl+E toggle */
-document.addEventListener('keydown', (ev) => {
-  if(ev.ctrlKey && ev.key.toLowerCase() === 'e'){
-    ev.preventDefault();
-    window.editmode(!isEditing);
-  }
-});
-
-/* ---------- formatting helpers ---------- */
-function format(command, value = null){
-  if(!isEditing) return;
-  editor.focus();
-  try { document.execCommand(command, false, value); }
-  catch(e){ /* some commands may be unsupported */ }
+// Formátování
+function format(command, value = null) {
+  if(!editor.isContentEditable) return;
+  document.execCommand(command, false, value);
   saveText();
 }
 
-/* ---------- Save / Auto-save ---------- */
-function saveText(){
-  try{ localStorage.setItem(STORAGE_KEY, editor.innerHTML); }catch(e){}
-}
-editor.addEventListener('input', () => { if(isEditing) saveText(); });
+// Automatické ukládání
+editor.addEventListener('input', () => {
+  if(editor.isContentEditable) saveText();
+});
+editor.addEventListener('keydown', handleKeys);
 
-/* ---------- Enter & Tab behaviour ---------- */
-editor.addEventListener('keydown', (e) => {
-  if(!isEditing) return;
-  if(e.key === 'Enter'){
+// Enter a Tab
+function handleKeys(e) {
+  if(!editor.isContentEditable) return;
+  if(e.key === 'Enter') {
     e.preventDefault();
-    // insert one blank line (two <br>) to imitate paragraph spacing
     document.execCommand('insertHTML', false, '<br><br>');
     saveText();
-  } else if(e.key === 'Tab'){
+  }
+  if(e.key === 'Tab') {
     e.preventDefault();
     document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
     saveText();
   }
+}
+
+// Uložení
+function saveText() {
+  localStorage.setItem('myWordContent', editor.innerHTML);
+}
+
+// Tajný edit mode
+window.editmode = () => {
+  editor.setAttribute('contenteditable', 'true');
+  toolbar.style.display = 'flex';
+  modalEditor.setAttribute('contenteditable', 'true');
+};
+
+// Klávesová zkratka Ctrl+E na zapnutí edit mode
+document.addEventListener('keydown', (e) => {
+  if(e.ctrlKey && e.key.toLowerCase() === 'e') {
+    e.preventDefault();
+    editmode();
+  }
 });
 
-/* ---------- Insert code block ---------- */
-function insertCode(){
-  if(!isEditing) return;
-  const raw = prompt('Vlož sem svůj kód:');
-  if(!raw) return;
-  const escaped = escapeHtml(raw);
-  const lines = escaped.split(/\r?\n/);
-  const nums = lines.map((_,i)=>i+1).join('<br>');
+// Vložení kódu
+function insertCode() {
+  if(!editor.isContentEditable) return;
+  const code = prompt("Vlož sem svůj kód:");
+  if(!code) return;
+  const lines = code.split('\n');
+  const lineNumbers = lines.map((_, i) => i + 1).join('<br>');
   const codeHTML = `
-    <div class="code-block" contenteditable="false">
-      <div class="line-numbers">${nums}</div>
+    <div class="code-block">
+      <div class="line-numbers">${lineNumbers}</div>
       <div class="code-content">${lines.join('<br>')}</div>
     </div><br>
   `;
-  // append to editor
   editor.innerHTML += codeHTML;
   saveText();
 }
 
-/* ---------- Popup editor (opens a new window with independent content) ---------- */
-function openPopupEditor(){
-  // each popup gets its own storage key so popups are independent
-  const popupKey = 'popupEditorContent_' + Date.now();
-  // open window (triggered by user click -> should not be blocked)
-  const popup = window.open('', '_blank', 'width=900,height=700');
-  if(!popup){
-    alert('Popup zablokován prohlížečem — povol je nebo použij jiné nastavení.');
-    return;
-  }
+// Otevření modálního editoru
+function openModalEditor() {
+  modal.style.display = 'flex';
+  modalEditor.innerHTML = editor.innerHTML;
 
-  // Build popup content (inject popupKey)
-  const popupHtml = `
-  <!doctype html>
-  <html lang="cs">
-  <head>
-    <meta charset="utf-8">
-    <title>Popup Editor</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <style>
-      body{margin:0;font-family:Arial, sans-serif;height:100vh;display:flex;flex-direction:column;}
-      .toolbar{background:#f0f0f0;padding:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-      #popupEditor{flex:1;padding:16px;outline:none;overflow:auto;white-space:pre-wrap;background:#fff;}
-      .code-block{background:#1e1e1e;color:#d4d4d4;font-family:'Courier New',monospace;padding:10px;display:flex;gap:12px;border-radius:4px;}
-      .line-numbers{text-align:right;user-select:none;color:#888;padding-right:8px;min-width:34px;}
-      .code-content{white-space:pre;}
-    </style>
-  </head>
-  <body>
-    <div class="toolbar">
-      <button onclick="format('bold')"><b>B</b></button>
-      <button onclick="format('underline')"><u>U</u></button>
-      <select onchange="format('fontName', this.value)">
-        <option value="">(font)</option>
-        <option value="Arial">Arial</option>
-        <option value="Courier New">Courier New</option>
-        <option value="monospace">Monospace</option>
-      </select>
-      <select onchange="format('fontSize', this.value)">
-        <option value="">(velikost)</option>
-        <option value="1">10px</option>
-        <option value="2">13px</option>
-        <option value="3">16px</option>
-        <option value="4">18px</option>
-        <option value="5">24px</option>
-      </select>
-      <button onclick="insertCode()">Vložit kód</button>
-    </div>
-    <div id="popupEditor" contenteditable="true"></div>
-
-    <script>
-      const popupKey = "${popupKey}";
-      const editor = document.getElementById('popupEditor');
-
-      function escapeHtml(s){
-        return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;');
-      }
-
-      // load saved
-      window.addEventListener('load', () => {
-        try{
-          const saved = localStorage.getItem(popupKey);
-          if(saved) editor.innerHTML = saved;
-        }catch(e){}
-      });
-
-      function saveText(){ try{ localStorage.setItem(popupKey, editor.innerHTML); }catch(e){} }
-
-      function format(cmd, val = null){ editor.focus(); try{ document.execCommand(cmd, false, val); }catch(e){} saveText(); }
-
-      editor.addEventListener('input', saveText);
-      editor.addEventListener('keydown', (e)=>{
-        if(e.key === 'Enter'){ e.preventDefault(); document.execCommand('insertHTML', false, '<br><br>'); saveText(); }
-        if(e.key === 'Tab'){ e.preventDefault(); document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;'); saveText(); }
-      });
-
-      function insertCode(){
-        const raw = prompt('Vlož kód:');
-        if(!raw) return;
-        const escaped = escapeHtml(raw);
-        const lines = escaped.split(/\\r?\\n/);
-        const nums = lines.map((_,i)=>i+1).join('<br>');
-        const codeHTML = \`
-          <div class="code-block" contenteditable="false">
-            <div class="line-numbers">\${nums}</div>
-            <div class="code-content">\${lines.join('<br>')}</div>
-          </div><br>\`;
-        editor.innerHTML += codeHTML;
-        saveText();
-      }
-    </script>
-  </body>
-  </html>
-  `;
-
-  popup.document.open();
-  popup.document.write(popupHtml);
-  popup.document.close();
+  modalEditor.addEventListener('input', () => {
+    if(editor.isContentEditable) {
+      editor.innerHTML = modalEditor.innerHTML;
+      saveText();
+    }
+  });
+  modalEditor.addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') {
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '<br><br>');
+      saveText();
+    }
+    if(e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+      saveText();
+    }
+  });
 }
 
-/* ---------- prevent accidental modifications of code-blocks ---------- */
-/* If you want code blocks to be non-editable, we inserted contenteditable="false" on them.
-   That keeps code blocks intact while allowing normal typing elsewhere. */
-
-/* ---------- quick tip in console ----------
-You can also type editmode() in the browser console to toggle the editor.
-Press Ctrl+E to toggle edit mode.
--------------------------------------------- */
+// Zavření modálního okna
+function closeModal() {
+  modal.style.display = 'none';
+}
 </script>
+
 </body>
 </html>
