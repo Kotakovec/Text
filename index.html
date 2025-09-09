@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Jednoduchý Word s Kódem a Modálním Editorem</title>
+<title>Editor s kódem a tlačítky pro dokumenty</title>
 <style>
   body {
     font-family: Arial, sans-serif;
@@ -12,16 +12,23 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
+    background: #000;
+    color: #fff;
   }
   .toolbar {
-    background: #f0f0f0;
+    background: #000000;
     padding: 10px;
     display: none; /* skrytý toolbar dokud není editmode */
     gap: 5px;
     flex-wrap: wrap;
+    color: #fff;
   }
   .toolbar button, .toolbar select {
     padding: 5px;
+    background: #000000;
+    color: #fff;
+    border: 2px solid #fff; /* bílé okraje */
+    border-radius: 25px;
   }
   #editor {
     flex: 1;
@@ -29,9 +36,10 @@
     border: none;
     outline: none;
     overflow-y: auto;
-    background: #fff;
+    background: #111; /* tmavé pozadí editoru */
     font-family: Arial, sans-serif;
     white-space: pre-wrap;
+    color: #fff; /* bílé písmo v editoru */
   }
   /* Styl pro code block */
   .code-block {
@@ -50,7 +58,6 @@
   .code-content {
     white-space: pre;
   }
-
   /* Modální okno */
   .modal {
     display: none;
@@ -59,26 +66,39 @@
     left: 10%;
     width: 80%;
     height: 80%;
-    background: #fff;
-    border: 2px solid #000;
+    background: #111; /* tmavé pozadí modálního okna */
+    border: 2px solid #fff; /* bílé okraje */
     z-index: 1000;
     flex-direction: column;
+    border-radius: 25px;
   }
   .modal-header {
-    background: #f0f0f0;
+    background: #222; /* tmavší hlavička */
     padding: 5px;
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
+    align-items: center;
+    color: #fff;
+    border-radius: 30px;
   }
   .modal-body {
     flex: 1;
     padding: 10px;
     overflow-y: auto;
-    border-top: 1px solid #ccc;
+    border-top: 1px solid #555;
+    color: #fff;
   }
   .close-btn {
     cursor: pointer;
     font-weight: bold;
+  }
+  .doc-btn {
+    padding: 5px 10px;
+    margin: 5px;
+    cursor: pointer;
+    color: #fff;
+    background: #000000;
+    border-radius: 25px;
   }
 </style>
 </head>
@@ -113,7 +133,7 @@
   <button onclick="format('insertUnorderedList')">• List</button>
   <button onclick="format('insertOrderedList')">1. List</button>
   <button onclick="insertCode()">Vložit kód</button>
-  <button onclick="openModalEditor()">Otevřít okno editoru</button>
+  <button onclick="insertDocButton()">Vložit tlačítko editoru</button>
 </div>
 
 <div id="editor" contenteditable="false"></div>
@@ -121,9 +141,10 @@
 <!-- Modální okno -->
 <div class="modal" id="modal">
   <div class="modal-header">
+    <span id="modal-title">Nový dokument</span>
     <span class="close-btn" onclick="closeModal()">X</span>
   </div>
-  <div class="modal-body" id="modal-editor" contenteditable="false" style="font-family: Arial, sans-serif; white-space: pre-wrap;"></div>
+  <div class="modal-body" id="modal-editor" contenteditable="true"></div>
 </div>
 
 <script>
@@ -131,10 +152,13 @@ const editor = document.getElementById('editor');
 const toolbar = document.getElementById('toolbar');
 const modal = document.getElementById('modal');
 const modalEditor = document.getElementById('modal-editor');
+const modalTitle = document.getElementById('modal-title');
+
+let currentDocId = null;
 
 // Načtení uloženého textu při načtení stránky
 window.onload = () => {
-  const saved = localStorage.getItem('myWordContent');
+  const saved = localStorage.getItem('mainContent');
   if(saved) editor.innerHTML = saved;
 };
 
@@ -168,14 +192,13 @@ function handleKeys(e) {
 
 // Uložení
 function saveText() {
-  localStorage.setItem('myWordContent', editor.innerHTML);
+  localStorage.setItem('mainContent', editor.innerHTML);
 }
 
 // Tajný edit mode
 window.editmode = () => {
   editor.setAttribute('contenteditable', 'true');
   toolbar.style.display = 'flex';
-  modalEditor.setAttribute('contenteditable', 'true');
 };
 
 // Klávesová zkratka Ctrl+E na zapnutí edit mode
@@ -188,7 +211,9 @@ document.addEventListener('keydown', (e) => {
 
 // Vložení kódu
 function insertCode() {
-  if(!editor.isContentEditable) return;
+  const target = (modal.style.display === "flex") ? modalEditor : editor;
+  if(!target.isContentEditable) return;
+
   const code = prompt("Vlož sem svůj kód:");
   if(!code) return;
   const lines = code.split('\n');
@@ -199,38 +224,58 @@ function insertCode() {
       <div class="code-content">${lines.join('<br>')}</div>
     </div><br>
   `;
-  editor.innerHTML += codeHTML;
+  target.innerHTML += codeHTML;
+
+  if (target === editor) saveText();
+  else if (currentDocId) localStorage.setItem(currentDocId, modalEditor.innerHTML);
+}
+
+// Vložení tlačítka pro dokument
+function insertDocButton() {
+  if(!editor.isContentEditable) return;
+  const name = prompt("Zadej název tlačítka:", "Nový dokument");
+  if (!name) return;
+  const id = "doc_" + Date.now();
+  const btn = `<button class="doc-btn" onclick="openModalEditor('${id}', '${name}')">${name}</button>`;
+  editor.innerHTML += btn;
   saveText();
 }
 
 // Otevření modálního editoru
-function openModalEditor() {
+function openModalEditor(id, name) {
+  currentDocId = id;
   modal.style.display = 'flex';
-  modalEditor.innerHTML = editor.innerHTML;
+  modalTitle.textContent = name;
 
-  modalEditor.addEventListener('input', () => {
-    if(editor.isContentEditable) {
-      editor.innerHTML = modalEditor.innerHTML;
-      saveText();
+  // Načti obsah
+  const saved = localStorage.getItem(id);
+  modalEditor.innerHTML = saved ? saved : "";
+
+  modalEditor.oninput = () => {
+    if(currentDocId) {
+      localStorage.setItem(currentDocId, modalEditor.innerHTML);
     }
-  });
-  modalEditor.addEventListener('keydown', (e) => {
+  };
+
+  modalEditor.onkeydown = (e) => {
     if(e.key === 'Enter') {
       e.preventDefault();
       document.execCommand('insertHTML', false, '<br><br>');
-      saveText();
     }
     if(e.key === 'Tab') {
       e.preventDefault();
       document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-      saveText();
     }
-  });
+  };
 }
 
 // Zavření modálního okna
 function closeModal() {
+  if(currentDocId) {
+    localStorage.setItem(currentDocId, modalEditor.innerHTML);
+  }
   modal.style.display = 'none';
+  currentDocId = null;
 }
 </script>
 
