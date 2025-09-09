@@ -260,4 +260,48 @@ function openPopupEditor(){
         }catch(e){}
       });
 
-      function saveText(){ try{ localStorage.setItem(popup
+      function saveText(){ try{ localStorage.setItem(popupKey, editor.innerHTML); }catch(e){} }
+
+      function format(cmd, val = null){ editor.focus(); try{ document.execCommand(cmd, false, val); }catch(e){} saveText(); }
+
+      editor.addEventListener('input', saveText);
+      editor.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){ e.preventDefault(); document.execCommand('insertHTML', false, '<br><br>'); saveText(); }
+        if(e.key === 'Tab'){ e.preventDefault(); document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;'); saveText(); }
+      });
+
+      function insertCode(){
+        const raw = prompt('Vlož kód:');
+        if(!raw) return;
+        const escaped = escapeHtml(raw);
+        const lines = escaped.split(/\\r?\\n/);
+        const nums = lines.map((_,i)=>i+1).join('<br>');
+        const codeHTML = \`
+          <div class="code-block" contenteditable="false">
+            <div class="line-numbers">\${nums}</div>
+            <div class="code-content">\${lines.join('<br>')}</div>
+          </div><br>\`;
+        editor.innerHTML += codeHTML;
+        saveText();
+      }
+    </script>
+  </body>
+  </html>
+  `;
+
+  popup.document.open();
+  popup.document.write(popupHtml);
+  popup.document.close();
+}
+
+/* ---------- prevent accidental modifications of code-blocks ---------- */
+/* If you want code blocks to be non-editable, we inserted contenteditable="false" on them.
+   That keeps code blocks intact while allowing normal typing elsewhere. */
+
+/* ---------- quick tip in console ----------
+You can also type editmode() in the browser console to toggle the editor.
+Press Ctrl+E to toggle edit mode.
+-------------------------------------------- */
+</script>
+</body>
+</html>
