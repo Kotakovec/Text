@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Editor s Firebase</title>
+<title>Editor s kódem a tlačítky pro dokumenty</title>
 <style>
-  body { font-family: Arial; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; background:#000; color:#fff; }
+  body { font-family: Arial, sans-serif; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; background:#000; color:#fff; }
   .toolbar { background:#000; padding:10px; display:none; gap:5px; flex-wrap:wrap; color:#fff; }
   .toolbar button, .toolbar select { padding:5px; background:#000; color:#fff; border:2px solid #fff; border-radius:25px; }
-  #editor { flex:1; padding:20px; border:none; outline:none; overflow-y:auto; background:#111; white-space:pre-wrap; color:#fff; }
+  #editor { flex:1; padding:20px; border:none; outline:none; overflow-y:auto; background:#111; font-family:Arial, sans-serif; white-space:pre-wrap; color:#fff; }
   .code-block { background:#1e1e1e; color:#d4d4d4; font-family:'Courier New', monospace; padding:10px; display:flex; gap:10px; }
   .line-numbers { text-align:right; user-select:none; color:#888; }
   .code-content { white-space:pre; }
@@ -51,7 +51,6 @@
   <button onclick="format('insertOrderedList')">1. List</button>
   <button onclick="insertCode()">Vložit kód</button>
   <button onclick="insertDocButton()">Vložit tlačítko editoru</button>
-  <button style="margin-left:auto;" onclick="saveMainContent()">💾 Uložit & Zavřít</button>
 </div>
 
 <div id="editor" contenteditable="false"></div>
@@ -61,113 +60,152 @@
     <span id="modal-title">Nový dokument</span>
     <span class="close-btn" onclick="closeModal()">X</span>
   </div>
-  <div class="modal-body" id="modal-editor" contenteditable="true">
-    <button style="margin-top:10px;" onclick="saveModalDoc()">💾 Uložit & Zavřít</button>
-  </div>
+  <div class="modal-body" id="modal-editor"></div>
 </div>
 
-<!-- Firebase SDK -->
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyDGmaBUXKgFq1mPuSIi4_DY6xUycwNGnKE",
-  authDomain: "textovy-dokument.firebaseapp.com",
-  projectId: "textovy-dokument",
-  storageBucket: "textovy-dokument.appspot.com",
-  messagingSenderId: "207844729713",
-  appId: "1:207844729713:web:464c37fbde39a43aec0cd0",
-  measurementId: "G-XS4PLS2G01"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
+<script>
 const editor = document.getElementById('editor');
 const toolbar = document.getElementById('toolbar');
 const modal = document.getElementById('modal');
 const modalEditor = document.getElementById('modal-editor');
 const modalTitle = document.getElementById('modal-title');
+
 let currentDocId = null;
 
-// Načtení hlavního obsahu z Firestore
-async function loadMainContent() {
-  const docRef = doc(db, "editor", "mainContent");
-  const docSnap = await getDoc(docRef);
-  if(docSnap.exists()) {
-    editor.innerHTML = docSnap.data().content;
-  }
-}
-loadMainContent();
+// Načtení uloženého textu při načtení stránky
+window.onload = () => {
+  const saved = localStorage.getItem('mainContent');
+  if(saved) editor.innerHTML = saved;
+};
 
 // Formátování
 function format(command, value = null) {
   if(!editor.isContentEditable) return;
   document.execCommand(command, false, value);
+  saveText();
 }
+
+// Automatické ukládání
+editor.addEventListener('input', () => {
+  if(editor.isContentEditable) saveText();
+});
+editor.addEventListener('keydown', handleKeys);
 
 // Enter a Tab
-editor.addEventListener('keydown', e => {
+function handleKeys(e) {
   if(!editor.isContentEditable) return;
-  if(e.key === 'Enter') { e.preventDefault(); document.execCommand('insertHTML', false, '<br><br>'); }
-  if(e.key === 'Tab') { e.preventDefault(); document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;'); }
-});
-
-// Hlavní obsah uložit a zavřít editor
-async function saveMainContent() {
-  await setDoc(doc(db, "editor", "mainContent"), {content: editor.innerHTML});
-  editor.setAttribute('contenteditable', 'false');
-  toolbar.style.display = 'none';
+  if(e.key === 'Enter') {
+    e.preventDefault();
+    document.execCommand('insertHTML', false, '<br><br>');
+    saveText();
+  }
+  if(e.key === 'Tab') {
+    e.preventDefault();
+    document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    saveText();
+  }
 }
 
-// Edit mode
-window.editmode = () => { editor.setAttribute('contenteditable','true'); toolbar.style.display='flex'; };
-document.addEventListener('keydown', e => { if(e.ctrlKey && e.key.toLowerCase()==='e'){ e.preventDefault(); editmode(); } });
+// Uložení
+function saveText() {
+  localStorage.setItem('mainContent', editor.innerHTML);
+}
+
+// Tajný edit mode
+window.editmode = () => {
+  editor.setAttribute('contenteditable', 'true');
+  toolbar.style.display = 'flex';
+};
+
+// Klávesová zkratka Ctrl+E na zapnutí edit mode
+document.addEventListener('keydown', (e) => {
+  if(e.ctrlKey && e.key.toLowerCase() === 'e') {
+    e.preventDefault();
+    editmode();
+  }
+});
 
 // Vložení kódu
 function insertCode() {
-  const target = (modal.style.display==="flex") ? modalEditor : editor;
+  const target = (modal.style.display === "flex") ? modalEditor : editor;
   if(!target.isContentEditable) return;
+
   const code = prompt("Vlož sem svůj kód:");
   if(!code) return;
   const lines = code.split('\n');
-  const lineNumbers = lines.map((_, i)=>i+1).join('<br>');
-  const codeHTML = `<div class="code-block"><div class="line-numbers">${lineNumbers}</div><div class="code-content">${lines.join('<br>')}</div></div><br>`;
+  const lineNumbers = lines.map((_, i) => i + 1).join('<br>');
+  const codeHTML = `
+    <div class="code-block">
+      <div class="line-numbers">${lineNumbers}</div>
+      <div class="code-content">${lines.join('<br>')}</div>
+    </div><br>
+  `;
   target.innerHTML += codeHTML;
+
+  if (target === editor) saveText();
+  else if (currentDocId) localStorage.setItem(currentDocId, modalEditor.innerHTML);
 }
 
-// Vložení dokumentu
+// Vložení tlačítka pro dokument
 function insertDocButton() {
   if(!editor.isContentEditable) return;
   const name = prompt("Zadej název tlačítka:", "Nový dokument");
-  if(!name) return;
+  if (!name) return;
   const id = "doc_" + Date.now();
-  const btn = `<button class="doc-btn" onclick="openModalEditor('${id}','${name}')">${name}</button>`;
+  const btn = `<button class="doc-btn" onclick="openModalEditor('${id}', '${name}')">${name}</button>`;
   editor.innerHTML += btn;
+  saveText();
 }
 
 // Otevření modálního editoru
-async function openModalEditor(id, name) {
+function openModalEditor(id, name) {
   currentDocId = id;
   modal.style.display = 'flex';
   modalTitle.textContent = name;
-  const docRef = doc(db, "documents", id);
-  const docSnap = await getDoc(docRef);
-  modalEditor.innerHTML = docSnap.exists() ? docSnap.data().content : "";
+
+  // Načti obsah
+  const saved = localStorage.getItem(id);
+  modalEditor.innerHTML = saved ? saved : "";
+
+  // Blokovat editaci pokud hlavní editor není odemčen
+  modalEditor.contentEditable = editor.isContentEditable ? "true" : "false";
+
+  modalEditor.oninput = () => {
+    if(currentDocId && editor.isContentEditable) {
+      localStorage.setItem(currentDocId, modalEditor.innerHTML);
+    } else {
+      // Obnov obsah, aby uživatel nemohl nic psát
+      const saved = localStorage.getItem(currentDocId);
+      modalEditor.innerHTML = saved ? saved : "";
+    }
+  };
+
+  modalEditor.onkeydown = (e) => {
+    if(!editor.isContentEditable){
+      e.preventDefault();
+      return;
+    }
+    if(e.key === 'Enter') {
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '<br><br>');
+    }
+    if(e.key === 'Tab') {
+      e.preventDefault();
+      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
+    }
+  };
 }
 
-// Uložení dokumentu z modálu a zavření
-async function saveModalDoc() {
-  if(!currentDocId) return;
-  await setDoc(doc(db, "documents", currentDocId), {content: modalEditor.innerHTML});
+// Zavření modálního okna
+function closeModal() {
+  if(currentDocId && editor.isContentEditable) {
+    localStorage.setItem(currentDocId, modalEditor.innerHTML);
+    saveText(); // uložit hlavní editor při zavření modálu
+  }
   modal.style.display = 'none';
   currentDocId = null;
 }
-
-// Zavření modálu bez ukládání
-function closeModal(){ modal.style.display='none'; currentDocId=null; }
-
 </script>
+
 </body>
 </html>
