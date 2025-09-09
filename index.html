@@ -1,210 +1,350 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Editor s kódem a tlačítky pro dokumenty</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Nekonečný Word konzolově</title>
 <style>
-  body { font-family: Arial, sans-serif; margin:0; padding:0; display:flex; flex-direction:column; height:100vh; background:#000; color:#fff; }
-  .toolbar { background:#000; padding:10px; display:none; gap:5px; flex-wrap:wrap; color:#fff; }
-  .toolbar button, .toolbar select { padding:5px; background:#000; color:#fff; border:2px solid #fff; border-radius:25px; }
-  #editor { flex:1; padding:20px; border:none; outline:none; overflow-y:auto; background:#111; font-family:Arial, sans-serif; white-space:pre-wrap; color:#fff; }
-  .code-block { background:#1e1e1e; color:#d4d4d4; font-family:'Courier New', monospace; padding:10px; display:flex; gap:10px; }
-  .line-numbers { text-align:right; user-select:none; color:#888; }
-  .code-content { white-space:pre; }
-  .modal { display:none; position:fixed; top:10%; left:10%; width:80%; height:80%; background:#111; border:2px solid #fff; z-index:1000; flex-direction:column; border-radius:25px; }
-  .modal-header { background:#222; padding:5px; display:flex; justify-content:space-between; align-items:center; color:#fff; border-radius:30px; }
-  .modal-body { flex:1; padding:10px; overflow-y:auto; border-top:1px solid #555; color:#fff; }
-  .close-btn { cursor:pointer; font-weight:bold; }
-  .doc-btn { padding:5px 10px; margin:5px; cursor:pointer; color:#fff; background:#000; border-radius:25px; }
+  body {
+    margin: 0;
+    background: #000;
+    font-family: monospace, Consolas, "Courier New", monospace;
+    color: #00FF00;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+  #terminal-header {
+    background: #000;
+    color: #33FF33;
+    font-weight: bold;
+    padding: 10px 20px;
+    font-family: monospace, Consolas, "Courier New", monospace;
+    border-bottom: 1px solid #004400;
+    user-select: none;
+    box-shadow: 0 0 10px #008800;
+  }
+  #editor {
+    flex: 1;
+    margin: 0 40px 30px 40px;
+    outline: none;
+    font-size: 18px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    user-select: none;
+    text-align: left;
+    border: 1px solid transparent;
+    padding: 10px;
+    background: #000;
+    color: #00FF00;
+    overflow-y: auto;
+  }
+  #editor.editable {
+    user-select: text;
+    border-color: #008000;
+    box-shadow: 0 0 10px #004400;
+  }
+  #editor > div {
+    display: block;
+  }
 </style>
 </head>
 <body>
 
-<div class="toolbar" id="toolbar">
-  <button onclick="format('bold')"><b>B</b></button>
-  <button onclick="format('underline')"><u>U</u></button>
-  <select onchange="format('fontName', this.value)">
-    <option value="">Font</option>
-    <option value="Arial">Klasický</option>
-    <option value="Courier New">Linux Terminal</option>
-    <option value="monospace">Monospace</option>
-  </select>
-  <select onchange="format('fontSize', this.value)">
-    <option value="">Velikost textu</option>
-    <option value="1">10px</option>
-    <option value="2">13px</option>
-    <option value="3">16px</option>
-    <option value="4">18px</option>
-    <option value="5">24px</option>
-    <option value="6">32px</option>
-    <option value="7">48px</option>
-  </select>
-  <select onchange="format('foreColor', this.value)">
-    <option value="">Barva textu</option>
-    <option value="red">Červená</option>
-    <option value="blue">Modrá</option>
-    <option value="green">Zelená</option>
-    <option value="black">Černá</option>
-  </select>
-  <button onclick="format('insertUnorderedList')">• List</button>
-  <button onclick="format('insertOrderedList')">1. List</button>
-  <button onclick="insertCode()">Vložit kód</button>
-  <button onclick="insertDocButton()">Vložit tlačítko editoru</button>
-</div>
+<div id="terminal-header">frcontrol@linux:~$</div>
 
 <div id="editor" contenteditable="false"></div>
 
-<div class="modal" id="modal">
-  <div class="modal-header">
-    <span id="modal-title">Nový dokument</span>
-    <span class="close-btn" onclick="closeModal()">X</span>
-  </div>
-  <div class="modal-body" id="modal-editor"></div>
-</div>
-
 <script>
-const editor = document.getElementById('editor');
-const toolbar = document.getElementById('toolbar');
-const modal = document.getElementById('modal');
-const modalEditor = document.getElementById('modal-editor');
-const modalTitle = document.getElementById('modal-title');
+  const STORAGE_KEY = 'frcontrol_content';
+  const editor = document.getElementById('editor');
 
-let currentDocId = null;
+  let bulletMode = false;
 
-// Načtení uloženého textu při načtení stránky
-window.onload = () => {
-  const saved = localStorage.getItem('mainContent');
-  if(saved) editor.innerHTML = saved;
-};
-
-// Formátování
-function format(command, value = null) {
-  if(!editor.isContentEditable) return;
-  document.execCommand(command, false, value);
-  saveText();
-}
-
-// Automatické ukládání
-editor.addEventListener('input', () => {
-  if(editor.isContentEditable) saveText();
-});
-editor.addEventListener('keydown', handleKeys);
-
-// Enter a Tab
-function handleKeys(e) {
-  if(!editor.isContentEditable) return;
-  if(e.key === 'Enter') {
-    e.preventDefault();
-    document.execCommand('insertHTML', false, '<br><br>');
-    saveText();
-  }
-  if(e.key === 'Tab') {
-    e.preventDefault();
-    document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-    saveText();
-  }
-}
-
-// Uložení
-function saveText() {
-  localStorage.setItem('mainContent', editor.innerHTML);
-}
-
-// Tajný edit mode
-window.editmode = () => {
-  editor.setAttribute('contenteditable', 'true');
-  toolbar.style.display = 'flex';
-};
-
-// Klávesová zkratka Ctrl+E na zapnutí edit mode
-document.addEventListener('keydown', (e) => {
-  if(e.ctrlKey && e.key.toLowerCase() === 'e') {
-    e.preventDefault();
-    editmode();
-  }
-});
-
-// Vložení kódu
-function insertCode() {
-  const target = (modal.style.display === "flex") ? modalEditor : editor;
-  if(!target.isContentEditable) return;
-
-  const code = prompt("Vlož sem svůj kód:");
-  if(!code) return;
-  const lines = code.split('\n');
-  const lineNumbers = lines.map((_, i) => i + 1).join('<br>');
-  const codeHTML = `
-    <div class="code-block">
-      <div class="line-numbers">${lineNumbers}</div>
-      <div class="code-content">${lines.join('<br>')}</div>
-    </div><br>
-  `;
-  target.innerHTML += codeHTML;
-
-  if (target === editor) saveText();
-  else if (currentDocId) localStorage.setItem(currentDocId, modalEditor.innerHTML);
-}
-
-// Vložení tlačítka pro dokument
-function insertDocButton() {
-  if(!editor.isContentEditable) return;
-  const name = prompt("Zadej název tlačítka:", "Nový dokument");
-  if (!name) return;
-  const id = "doc_" + Date.now();
-  const btn = `<button class="doc-btn" onclick="openModalEditor('${id}', '${name}')">${name}</button>`;
-  editor.innerHTML += btn;
-  saveText();
-}
-
-// Otevření modálního editoru
-function openModalEditor(id, name) {
-  currentDocId = id;
-  modal.style.display = 'flex';
-  modalTitle.textContent = name;
-
-  // Načti obsah
-  const saved = localStorage.getItem(id);
-  modalEditor.innerHTML = saved ? saved : "";
-
-  // Blokovat editaci pokud hlavní editor není odemčen
-  modalEditor.contentEditable = editor.isContentEditable ? "true" : "false";
-
-  modalEditor.oninput = () => {
-    if(currentDocId && editor.isContentEditable) {
-      localStorage.setItem(currentDocId, modalEditor.innerHTML);
+  function loadContent() {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      editor.innerHTML = saved;
     } else {
-      // Obnov obsah, aby uživatel nemohl nic psát
-      const saved = localStorage.getItem(currentDocId);
-      modalEditor.innerHTML = saved ? saved : "";
+      editor.innerHTML = '<div><br></div>';
     }
-  };
+  }
 
-  modalEditor.onkeydown = (e) => {
-    if(!editor.isContentEditable){
+  function saveContent() {
+    localStorage.setItem(STORAGE_KEY, editor.innerHTML);
+  }
+
+  loadContent();
+
+  window.controlEnabled = false;
+
+  function enableEditing() {
+    editor.contentEditable = "true";
+    editor.classList.add('editable');
+    editor.focus();
+    placeCaretAtEnd(getLastOrFirstLine());
+    window.controlEnabled = true;
+
+    // Nezapisujeme do terminálu, ale vypíšeme do konzole
+    console.clear();
+    console.log("Editor odemčen. Můžeš psát!");
+    console.log(`
+Příkazy dostupné v konzoli:
+
+control - odemčení editoru
+save - uložit obsah a zamknout editor
+exit - zamknout editor bez uložení
+leva - zarovnat řádek vlevo
+stred - zarovnat řádek na střed
+prava - zarovnat řádek vpravo
+tucny - přepnout tučný styl vybraného textu
+podtrzeny - přepnout podtržení vybraného textu
+odrazka - zapnout/vypnout režim odrážek
+size(X) - nastavit velikost vybraného textu na X px, např. size(20)
+    `);
+  }
+
+  function disableEditing() {
+    editor.contentEditable = "false";
+    editor.classList.remove('editable');
+    window.controlEnabled = false;
+    console.log("Editor uzamčen.");
+  }
+
+  function getLastOrFirstLine() {
+    if (editor.childNodes.length === 0) {
+      const div = document.createElement('div');
+      div.innerHTML = '<br>';
+      editor.appendChild(div);
+      return div;
+    }
+    for (let i = editor.childNodes.length - 1; i >= 0; i--) {
+      const node = editor.childNodes[i];
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'DIV') {
+        const text = node.textContent.trim();
+        if (text.length > 0) return node;
+      }
+    }
+    for (let i = 0; i < editor.childNodes.length; i++) {
+      const node = editor.childNodes[i];
+      if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'DIV') {
+        return node;
+      }
+    }
+    const div = document.createElement('div');
+    div.innerHTML = '<br>';
+    editor.appendChild(div);
+    return div;
+  }
+
+  function placeCaretAtEnd(el) {
+    if (!el) return;
+    editor.focus();
+    const range = document.createRange();
+    const sel = window.getSelection();
+
+    if (el.lastChild && el.lastChild.nodeType === Node.TEXT_NODE) {
+      range.setStart(el.lastChild, el.lastChild.length);
+    } else {
+      range.selectNodeContents(el);
+      range.collapse(false);
+    }
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function applyAlign(align) {
+    const line = getLastOrFirstLine();
+    if (!line || !line.style) return;
+    line.style.textAlign = align;
+    placeCaretAtEnd(line);
+    console.log(`Řádek zarovnán na ${align}`);
+  }
+
+  function toggleBoldOnSelection() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro tučný styl.");
+      return;
+    }
+    document.execCommand('bold');
+    sel.removeAllRanges();
+    sel.addRange(range);
+    console.log("Tučný styl přepnut na vybraný text.");
+  }
+
+  function toggleUnderlineOnSelection() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro podtržení.");
+      return;
+    }
+    document.execCommand('underline');
+    sel.removeAllRanges();
+    sel.addRange(range);
+    console.log("Podtržení přepnuto na vybraný text.");
+  }
+
+  function setSizeOnSelection(px) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    if (range.collapsed) {
+      console.log("Není vybrán žádný text pro nastavení velikosti.");
+      return;
+    }
+
+    const span = document.createElement('span');
+    span.style.fontSize = px + 'px';
+
+    const contents = range.extractContents();
+    span.appendChild(contents);
+    range.insertNode(span);
+
+    range.setStartAfter(span);
+    range.collapse(true);
+
+    sel.removeAllRanges();
+    sel.addRange(range);
+
+    console.log(`Velikost vybraného textu nastavena na ${px}px.`);
+  }
+
+  editor.addEventListener('keydown', (e) => {
+    if (!window.controlEnabled) {
       e.preventDefault();
       return;
     }
-    if(e.key === 'Enter') {
+    if (e.key === 'Enter') {
       e.preventDefault();
-      document.execCommand('insertHTML', false, '<br><br>');
-    }
-    if(e.key === 'Tab') {
-      e.preventDefault();
-      document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-    }
-  };
-}
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
 
-// Zavření modálního okna
-function closeModal() {
-  if(currentDocId && editor.isContentEditable) {
-    localStorage.setItem(currentDocId, modalEditor.innerHTML);
-    saveText(); // uložit hlavní editor při zavření modálu
-  }
-  modal.style.display = 'none';
-  currentDocId = null;
-}
+      const newDiv = document.createElement('div');
+      if (bulletMode) {
+        newDiv.textContent = '• ';
+      } else {
+        newDiv.innerHTML = '<br>';
+      }
+
+      const currentLine = getLastOrFirstLine();
+      if (currentLine && currentLine.nextSibling) {
+        editor.insertBefore(newDiv, currentLine.nextSibling);
+      } else {
+        editor.appendChild(newDiv);
+      }
+
+      placeCaretAtEnd(newDiv);
+      return;
+    }
+  });
+
+  editor.addEventListener('beforeinput', (e) => {
+    if (!window.controlEnabled) {
+      e.preventDefault();
+    }
+  });
+
+  Object.defineProperties(window, {
+    control: {
+      get() {
+        if (!window.controlEnabled) {
+          enableEditing();
+        } else {
+          console.log("Editor je už odemčený.");
+        }
+      }
+    },
+    save: {
+      get() {
+        if (window.controlEnabled) {
+          saveContent();
+          disableEditing();
+          console.log("Obsah uložen do localStorage a editor uzamčen.");
+        } else {
+          console.log("Editor není aktivní, není co ukládat.");
+        }
+      }
+    },
+    exit: {
+      get() {
+        if (window.controlEnabled) {
+          disableEditing();
+          console.log("Editor uzamčen bez uložení.");
+        } else {
+          console.log("Editor není aktivní.");
+        }
+      }
+    },
+    leva: {
+      get() {
+        applyAlign('left');
+      }
+    },
+    stred: {
+      get() {
+        applyAlign('center');
+      }
+    },
+    prava: {
+      get() {
+        applyAlign('right');
+      }
+    },
+    tucny: {
+      get() {
+        toggleBoldOnSelection();
+      }
+    },
+    podtrzeny: {
+      get() {
+        toggleUnderlineOnSelection();
+      }
+    },
+    odrazka: {
+      get() {
+        bulletMode = !bulletMode;
+        console.log('Režim odrážek ' + (bulletMode ? 'zapnut' : 'vypnut'));
+        if (bulletMode) {
+          const lastLine = getLastOrFirstLine();
+          if (lastLine && !lastLine.textContent.startsWith('• ')) {
+            lastLine.textContent = '• ' + lastLine.textContent;
+            placeCaretAtEnd(lastLine);
+          }
+        }
+      }
+    }
+  });
+
+  window.size = function(px) {
+    if (!window.controlEnabled) {
+      console.log("Nejprve spusť 'control' pro odemčení editoru.");
+      return;
+    }
+    const num = Number(px);
+    if (isNaN(num) || num <= 0 || num > 100) {
+      console.log("Neplatná velikost. Zadej číslo v rozsahu 1-100.");
+      return;
+    }
+    setSizeOnSelection(num);
+  };
+
+  // Klávesová zkratka pro odemčení editoru: Ctrl+Shift+C
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.shiftKey && e.code === 'KeyC') {
+      if (!window.controlEnabled) enableEditing();
+      else console.log("Editor je už odemčený.");
+    }
+  });
+
+  // Inicialní zpráva
+  
 </script>
 
 </body>
